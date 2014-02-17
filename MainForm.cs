@@ -126,11 +126,14 @@ namespace ImageBulkRenamer
         #region Preview
 
         private RenameItem[] items;
+        private int noExifTimestampCount;
 
 
         void PreviewWkr_DoWork(object sender, DoWorkEventArgs e)
         {
             BackgroundWorker wkr = sender as BackgroundWorker;
+
+            noExifTimestampCount = 0;
 
             FileInfo[] files = imageDir.GetFiles("*.jp*g");
             items = new RenameItem[files.Length];
@@ -151,6 +154,7 @@ namespace ImageBulkRenamer
                 catch (ArgumentException)
                 {
                     picTimestamp = DateTime.MinValue;
+                    noExifTimestampCount++;
                 }
 
                 var item = new RenameItem();
@@ -223,6 +227,14 @@ namespace ImageBulkRenamer
             this.UseWaitCursor = false;
             this.Enabled = true;
             startButton.Enabled = (listView.Items.Count > 0);
+
+            if (noExifTimestampCount > 0)
+            {
+                string msg = string.Format("{0} {1} had no EXIF timestamp",
+                                           noExifTimestampCount,
+                                           (noExifTimestampCount == 1) ? "image" : "images");
+                MessageBox.Show(this, msg, "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
 
