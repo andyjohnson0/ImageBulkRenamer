@@ -50,10 +50,10 @@ namespace ImageBulkRenamer
             this.UseWaitCursor = true;
             this.Enabled = false;
             BackgroundWorker wkr = new BackgroundWorker();
-            wkr.DoWork += new DoWorkEventHandler(PreviewWkr_DoWork);
-            wkr.RunWorkerCompleted += new RunWorkerCompletedEventHandler(PreviewWkr_RunWorkerCompleted);
+            wkr.DoWork += new DoWorkEventHandler(GetTimestampsWkr_DoWork);
+            wkr.RunWorkerCompleted += new RunWorkerCompletedEventHandler(GetTimestampsWkr_RunWorkerCompleted);
             wkr.WorkerReportsProgress = true;
-            wkr.ProgressChanged += new ProgressChangedEventHandler(PreviewWkr_ProgressChanged);
+            wkr.ProgressChanged += new ProgressChangedEventHandler(GetTimestampsWkr_ProgressChanged);
             wkr.RunWorkerAsync();
         }
 
@@ -141,7 +141,7 @@ namespace ImageBulkRenamer
         private int noExifTimestampCount;
 
 
-        void PreviewWkr_DoWork(object sender, DoWorkEventArgs e)
+        void GetTimestampsWkr_DoWork(object sender, DoWorkEventArgs e)
         {
             BackgroundWorker wkr = sender as BackgroundWorker;
 
@@ -213,7 +213,7 @@ namespace ImageBulkRenamer
         }
 
 
-        void PreviewWkr_ProgressChanged(object sender, ProgressChangedEventArgs e)
+        void GetTimestampsWkr_ProgressChanged(object sender, ProgressChangedEventArgs e)
         {
             int itemIdx = (int)e.UserState;
 
@@ -232,6 +232,27 @@ namespace ImageBulkRenamer
 
             listView.EndUpdate();
         }
+
+
+        void GetTimestampsWkr_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
+        {
+            toolStripProgressBar.Visible = false;
+            toolStripStatusLabel.Text = "Ready";
+            listView.AutoResizeColumns(ColumnHeaderAutoResizeStyle.HeaderSize);
+            this.UseWaitCursor = false;
+            this.Enabled = true;
+            startButton.Enabled = (listView.Items.Count > 0);
+
+            if (noExifTimestampCount > 0)
+            {
+                string msg = string.Format("{0} {1} had no EXIF timestamp",
+                                           noExifTimestampCount,
+                                           (noExifTimestampCount == 1) ? "image" : "images");
+                MessageBox.Show(this, msg, "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+
 
 
         private static ListViewItem CreateListViewItem(RenameItem item)
@@ -255,26 +276,6 @@ namespace ImageBulkRenamer
             else
                 lvi.SubItems.Add("");
             return lvi;
-        }
-
-
-
-        void PreviewWkr_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
-        {
-            toolStripProgressBar.Visible = false;
-            toolStripStatusLabel.Text = "Ready";
-            listView.AutoResizeColumns(ColumnHeaderAutoResizeStyle.HeaderSize);
-            this.UseWaitCursor = false;
-            this.Enabled = true;
-            startButton.Enabled = (listView.Items.Count > 0);
-
-            if (noExifTimestampCount > 0)
-            {
-                string msg = string.Format("{0} {1} had no EXIF timestamp",
-                                           noExifTimestampCount,
-                                           (noExifTimestampCount == 1) ? "image" : "images");
-                MessageBox.Show(this, msg, "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
         }
 
 
