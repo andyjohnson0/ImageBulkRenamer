@@ -52,7 +52,7 @@
             this.fileToolStripMenuItem});
             this.menuStrip1.Location = new System.Drawing.Point(0, 0);
             this.menuStrip1.Name = "menuStrip1";
-            this.menuStrip1.Size = new System.Drawing.Size(863, 24);
+            this.menuStrip1.Size = new System.Drawing.Size(900, 24);
             this.menuStrip1.TabIndex = 0;
             this.menuStrip1.Text = "menuStrip1";
             // 
@@ -95,7 +95,7 @@
             this.listView.Location = new System.Drawing.Point(12, 27);
             this.listView.MultiSelect = false;
             this.listView.Name = "listView";
-            this.listView.Size = new System.Drawing.Size(839, 375);
+            this.listView.Size = new System.Drawing.Size(876, 393);
             this.listView.TabIndex = 1;
             this.listView.UseCompatibleStateImageBehavior = false;
             this.listView.View = System.Windows.Forms.View.Details;
@@ -131,7 +131,7 @@
             this.startButton.Anchor = System.Windows.Forms.AnchorStyles.Bottom;
             this.startButton.BackColor = System.Drawing.SystemColors.Control;
             this.startButton.Enabled = false;
-            this.startButton.Location = new System.Drawing.Point(392, 418);
+            this.startButton.Location = new System.Drawing.Point(413, 432);
             this.startButton.Name = "startButton";
             this.startButton.Size = new System.Drawing.Size(75, 23);
             this.startButton.TabIndex = 3;
@@ -144,9 +144,9 @@
             this.statusStrip.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.toolStripStatusLabel,
             this.toolStripProgressBar});
-            this.statusStrip.Location = new System.Drawing.Point(0, 453);
+            this.statusStrip.Location = new System.Drawing.Point(0, 471);
             this.statusStrip.Name = "statusStrip";
-            this.statusStrip.Size = new System.Drawing.Size(863, 22);
+            this.statusStrip.Size = new System.Drawing.Size(900, 22);
             this.statusStrip.TabIndex = 4;
             this.statusStrip.Text = "statusStrip1";
             // 
@@ -166,7 +166,7 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(863, 475);
+            this.ClientSize = new System.Drawing.Size(900, 493);
             this.Controls.Add(this.statusStrip);
             this.Controls.Add(this.startButton);
             this.Controls.Add(this.listView);

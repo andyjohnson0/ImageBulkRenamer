@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text;
 using System.IO;
 using System.Windows.Forms;
+using System.Diagnostics;
 
 
 namespace ImageBulkRenamer
@@ -20,8 +21,6 @@ namespace ImageBulkRenamer
         }
 
         private DirectoryInfo imageDir;
-
-
 
 
         private void MainForm_Load(object sender, EventArgs e)
@@ -83,7 +82,10 @@ namespace ImageBulkRenamer
             {
                 ContextMenu menu = new ContextMenu();
                 MenuItem item = menu.MenuItems.Add("&Edit");
-                item.Click += new EventHandler(EditItem_Click);
+                item.Click += new EventHandler(ItemEdit_Click);
+                item.Tag = hitInfo.Item.Index;
+                item = menu.MenuItems.Add("&Preview");
+                item.Click += new EventHandler(ItemPreview_Click);
                 item.Tag = hitInfo.Item.Index;
                 menu.Show(listView, e.Location);
             }
@@ -102,10 +104,20 @@ namespace ImageBulkRenamer
         }
 
 
-        void EditItem_Click(object sender, EventArgs e)
+        void ItemEdit_Click(object sender, EventArgs e)
         {
             var itemIdx = (int) ((MenuItem)sender).Tag;  // Index into items array.
             ShowItemEditDialog(itemIdx);
+        }
+
+
+        void ItemPreview_Click(object sender, EventArgs e)
+        {
+            var itemIdx = (int)((MenuItem)sender).Tag;  // Index into items array.
+            System.Diagnostics.Process proc = new System.Diagnostics.Process();
+            proc.EnableRaisingEvents = false;
+            proc.StartInfo.FileName = Path.Combine(imageDir.FullName, items[itemIdx].InputFileName);
+            proc.Start();
         }
 
 
@@ -145,11 +157,15 @@ namespace ImageBulkRenamer
                 DateTime picTimestamp;
                 try
                 {
-                    var bmp = new Bitmap(fi.FullName);
-                    PropertyItem bmpDateTime = bmp.GetPropertyItem(0x0132);
-                    string picTimestampStr = Encoding.ASCII.GetString(bmpDateTime.Value, 0, bmpDateTime.Len - 1);
-                    DateTime.TryParseExact(picTimestampStr, "yyyy:MM:dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture,
-                                           System.Globalization.DateTimeStyles.AssumeLocal, out picTimestamp);
+                    using (var bmp = new Bitmap(fi.FullName))
+                    {
+                        PropertyItem bmpDateTime = bmp.GetPropertyItem(0x9003);
+                        if (bmpDateTime == null)
+                            bmpDateTime = bmp.GetPropertyItem(0x0132);
+                        string picTimestampStr = Encoding.ASCII.GetString(bmpDateTime.Value, 0, bmpDateTime.Len - 1);
+                        DateTime.TryParseExact(picTimestampStr, "yyyy:MM:dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture,
+                                               System.Globalization.DateTimeStyles.AssumeLocal, out picTimestamp);
+                    }
                 }
                 catch (ArgumentException)
                 {
@@ -163,7 +179,31 @@ namespace ImageBulkRenamer
                 item.InputFileCreatonTimestamp = fi.CreationTimeUtc;
                 item.InputFileModificationTimestamp = fi.LastWriteTimeUtc;
                 if (picTimestamp != DateTime.MinValue)
-                    item.OutputFileName = RenameItem.BuildFileName(picTimestamp, fi.Extension);
+                {
+                    for(int iSuffix = 0; iSuffix <= 99; iSuffix++)
+                    {
+                        string outputFileName = RenameItem.BuildFileName(picTimestamp);
+                        if (iSuffix > 0)
+                            outputFileName += "_" + iSuffix.ToString("00");
+                        outputFileName += ".jpg";
+
+                        bool found = false;
+                        for (int j = 0; j < i; j++)
+                        {
+                            if (items[j].OutputFileName == outputFileName)
+                            {
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        if (!found)
+                        {
+                            item.OutputFileName = outputFileName;
+                            break;
+                        }
+                    }
+                }
                 item.OutputFileTimestamp = picTimestamp;
                 items[i] = item;
 
@@ -245,44 +285,80 @@ namespace ImageBulkRenamer
         #region Image Renaming
 
         private int okCount;
+        private int noChangeCount;
         private int skippedCount;
+        private int nameConflictCount;
         private int errorCount;
         private const string okLabel = "OK";
+        private const string noChangeLabel = "No change";
         private const string skippedLabel = "Skipped";
+        private const string nameConflictLabel = "Filename already exists";
         private const string errorLabel = "Error";
 
         void RenameWkr_DoWork(object sender, DoWorkEventArgs e)
         {
             BackgroundWorker wkr = sender as BackgroundWorker;
 
-            okCount = skippedCount = errorCount = 0;
+            okCount = noChangeCount = skippedCount = nameConflictCount = errorCount = 0;
 
             for (int i = 0; i < items.Length; i++)
             {
-                if ((items[i].OutputFileName != null) &&
-                    (items[i].InputFileName != items[i].OutputFileName) &&
-                    (items[i].OutputFileTimestamp != DateTime.MinValue))
+                var sourceFileName = Path.Combine(imageDir.FullName, items[i].InputFileName);
+                var destFileName = Path.Combine(imageDir.FullName, items[i].OutputFileName);
+
+                if (items[i].OutputFileName == null)
                 {
-                    var sourceFileName = Path.Combine(imageDir.FullName, items[i].InputFileName);
-                    var destFileName = Path.Combine(imageDir.FullName, items[i].OutputFileName);
+                    items[i].RenameStatus = skippedLabel;
+                    skippedCount++;
+                }
+                else if (string.Equals(items[i].InputFileName, items[i].OutputFileName, StringComparison.InvariantCultureIgnoreCase))
+                {
+                    items[i].RenameStatus = noChangeLabel;
+                    noChangeCount++;
+                }
+                else if (File.Exists(destFileName))
+                {
+                    items[i].RenameStatus = nameConflictLabel;
+                    nameConflictCount++;
+                }
+                else
+                {
+                    bool succeeded = true;
+
+                    // Rename
                     try
                     {
                         File.Move(sourceFileName, destFileName);
-                        File.SetCreationTimeUtc(destFileName, items[i].OutputFileTimestamp);
-                        File.SetLastAccessTimeUtc(destFileName, items[i].OutputFileTimestamp);
+                    }
+                    catch (Exception)
+                    {
+                        succeeded = false;
+                    }
+
+                    // Redate
+                    try
+                    {
+                        if (items[i].OutputFileTimestamp != DateTime.MinValue)
+                        {
+                            File.SetCreationTime(destFileName, items[i].OutputFileTimestamp);
+                            File.SetLastWriteTime(destFileName, items[i].OutputFileTimestamp);
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        succeeded = false;
+                    }
+
+                    if (succeeded)
+                    {
                         items[i].RenameStatus = okLabel;
                         okCount++;
                     }
-                    catch (Exception)
+                    else
                     {
                         items[i].RenameStatus = errorLabel;
                         errorCount++;
                     }
-                }
-                else
-                {
-                    items[i].RenameStatus = skippedLabel;
-                    skippedCount++;
                 }
 
                 int progress = (int)(((double)(i + 1) / (double)items.Length) * 100D);
@@ -303,14 +379,24 @@ namespace ImageBulkRenamer
             listView.BeginUpdate();
             ListViewItem lvi = listView.Items[itemIdx];
             lvi.SubItems[4].Text = items[itemIdx].RenameStatus;
-            if (items[itemIdx].RenameStatus == skippedLabel)
+
+            switch(items[itemIdx].RenameStatus)
             {
-                lvi.BackColor = Color.Orange;
+                case okLabel:
+                    break;
+                case noChangeLabel:
+                    break;
+                case skippedLabel:
+                    lvi.BackColor = Color.Orange;
+                    break;
+                case nameConflictLabel:
+                    lvi.BackColor = Color.Orange;
+                    break;
+                case errorLabel:
+                    lvi.BackColor = Color.Red;
+                    break;
             }
-            else if (items[itemIdx].RenameStatus == errorLabel)
-            {
-                lvi.BackColor = Color.Red;
-            }
+
             lvi.EnsureVisible();
             listView.EndUpdate();
         }
@@ -327,9 +413,18 @@ namespace ImageBulkRenamer
             var sb = new StringBuilder();
             sb.Append(string.Format("{0} image {1} renamed.", okCount, (okCount == 1) ? "file was" : "files were"));
             var icon = MessageBoxIcon.Information;
+            if (noChangeCount > 0)
+            {
+                sb.Append(string.Format(" {0} image {1} not renamed.", noChangeCount, (noChangeCount == 1) ? "file was" : "files were"));
+            }
             if (skippedCount > 0)
             {
                 sb.Append(string.Format(" {0} image {1} skipped.", skippedCount, (skippedCount == 1) ? "file was" : "files were"));
+                icon = MessageBoxIcon.Warning;
+            }
+            if (nameConflictCount > 0)
+            {
+                sb.Append(string.Format(" {0} image {1} had name conflicts.", nameConflictCount, (nameConflictCount == 1) ? "file" : "files"));
                 icon = MessageBoxIcon.Warning;
             }
             if (errorCount > 0)

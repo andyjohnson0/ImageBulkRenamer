@@ -35,9 +35,9 @@ namespace ImageBulkRenamer
         public string RenameStatus { get; set; }
 
 
-        public static string BuildFileName(DateTime dt, string ext)
+        public static string BuildFileName(DateTime dt)
         {
-            return dt.ToString("yyyyMMdd_HHmmss") + ext.ToLower(System.Globalization.CultureInfo.InvariantCulture);
+            return dt.ToString("yyyyMMdd_HHmmss");
         }
     }
 }

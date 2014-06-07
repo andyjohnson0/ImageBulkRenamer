@@ -25,12 +25,12 @@ namespace ImageBulkRenamer
         private void ItemEditDialog_Load(object sender, EventArgs e)
         {
             specifyTimestampTimePicker.Value = (Item.InputExifTimestamp != DateTime.MinValue) ? Item.InputExifTimestamp : Item.InputFileCreatonTimestamp;
-            specifyFilenameTextBox.Text = RenameItem.BuildFileName(specifyTimestampTimePicker.Value, ".jpg");
+            specifyFilenameTextBox.Text = RenameItem.BuildFileName(specifyTimestampTimePicker.Value) + ".jpg";
 
-            modificationFilenameTextBox.Text = RenameItem.BuildFileName(Item.InputFileModificationTimestamp, ".jpg");
+            modificationFilenameTextBox.Text = RenameItem.BuildFileName(Item.InputFileModificationTimestamp) + ".jpg";
             modificationTimestampTextBox.Text = Item.InputFileModificationTimestamp.ToString("yyyy-MM-dd HH:mm:ss");
 
-            creationFilenameTextBox.Text = RenameItem.BuildFileName(Item.InputFileCreatonTimestamp, ".jpg");
+            creationFilenameTextBox.Text = RenameItem.BuildFileName(Item.InputFileCreatonTimestamp) + ".jpg";
             creationTimestampTextBox.Text = Item.InputFileCreatonTimestamp.ToString("yyyy-MM-dd HH:mm:ss");
 
             specifyRadioButton.Checked = true;
