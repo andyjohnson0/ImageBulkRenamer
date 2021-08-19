@@ -7,7 +7,7 @@ This is a simple application to allow an arbitrary-size collection of image (jpg
 I use this application as part of my simple photograph archiving and processing workflow. I couldn't find something that did exactly
 what I wanted, so I built my own solution.
 
-The current version does just what I need and no more. Time permitting, I hope to enhance it 
+The current version does just what I need and no more. The code is fairly hacky and should probably be simplified as a console app.
 
 ## Installation and Use
 
@@ -25,7 +25,7 @@ skipped.
 
 ## Author
 
-Andrew Johnson | andy@andrewjohnson.me.uk | http://andrewjohnson.me.uk | andyjohnson0@gmail.com | @andyjohnson0
+Andrew Johnson | andy@andyjohnson.uk | http://andyjohnson.uk
 
 ## License
 

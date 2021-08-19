@@ -1,4 +1,4 @@
-﻿namespace ImageBulkRenamer
+﻿namespace uk.andyjohnson.ImageBulkRenamer
 {
     partial class ItemEditDialog
     {

@@ -4,14 +4,13 @@ using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Drawing.Imaging;
-using System.Linq;
 using System.Text;
 using System.IO;
 using System.Windows.Forms;
-using System.Diagnostics;
+using System.Reflection;
 
 
-namespace ImageBulkRenamer
+namespace uk.andyjohnson.ImageBulkRenamer
 {
     public partial class MainForm : Form
     {
@@ -34,7 +33,15 @@ namespace ImageBulkRenamer
             Application.Exit();
         }
 
-        
+
+        private void aboutToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            var msg = string.Format("Image File Bulk Renamer v{0} by Andrew Johnson.\r\n\r\nSee https://github.com/andyjohnson0/ImageBulkRenamer for info.",
+                                    Assembly.GetExecutingAssembly().GetName().Version.ToString());
+            MessageBox.Show(this, msg, "About", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+
         private void openToolStripMenuItem_Click(object sender, EventArgs e)
         {
             var dlg = new FolderBrowserDialog();
@@ -49,6 +56,7 @@ namespace ImageBulkRenamer
 
             this.UseWaitCursor = true;
             this.Enabled = false;
+            preview_fallbackToFileCreationTimestamp = fallbackToFileCreationCb.Checked;
             BackgroundWorker wkr = new BackgroundWorker();
             wkr.DoWork += new DoWorkEventHandler(GetTimestampsWkr_DoWork);
             wkr.RunWorkerCompleted += new RunWorkerCompletedEventHandler(GetTimestampsWkr_RunWorkerCompleted);
@@ -137,8 +145,10 @@ namespace ImageBulkRenamer
 
         #region Preview
 
+        private bool preview_fallbackToFileCreationTimestamp;
         private RenameItem[] items;
         private int noExifTimestampCount;
+        private int fallbackTimestampCount;
 
 
         void GetTimestampsWkr_DoWork(object sender, DoWorkEventArgs e)
@@ -154,7 +164,7 @@ namespace ImageBulkRenamer
             {
                 FileInfo fi = files[i];
 
-                DateTime picTimestamp;
+                DateTime picTimestampLocal;
                 try
                 {
                     using (var bmp = new Bitmap(fi.FullName))
@@ -164,25 +174,34 @@ namespace ImageBulkRenamer
                             bmpDateTime = bmp.GetPropertyItem(0x0132);
                         string picTimestampStr = Encoding.ASCII.GetString(bmpDateTime.Value, 0, bmpDateTime.Len - 1);
                         DateTime.TryParseExact(picTimestampStr, "yyyy:MM:dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture,
-                                               System.Globalization.DateTimeStyles.AssumeLocal, out picTimestamp);
+                                               System.Globalization.DateTimeStyles.AssumeLocal, out picTimestampLocal);
                     }
                 }
                 catch (ArgumentException)
                 {
-                    picTimestamp = DateTime.MinValue;
-                    noExifTimestampCount++;
+                    if (preview_fallbackToFileCreationTimestamp)
+                    {
+                        picTimestampLocal = fi.CreationTime;
+                        noExifTimestampCount++;
+                        fallbackTimestampCount++;
+                    }
+                    else
+                    {
+                        picTimestampLocal = DateTime.MinValue;
+                        noExifTimestampCount++;
+                    }
                 }
 
                 var item = new RenameItem();
                 item.InputFileName = fi.Name;
-                item.InputExifTimestamp = picTimestamp;
+                item.InputExifTimestamp = picTimestampLocal;
                 item.InputFileCreatonTimestamp = fi.CreationTimeUtc;
                 item.InputFileModificationTimestamp = fi.LastWriteTimeUtc;
-                if (picTimestamp != DateTime.MinValue)
+                if (picTimestampLocal != DateTime.MinValue)
                 {
                     for(int iSuffix = 0; iSuffix <= 99; iSuffix++)
                     {
-                        string outputFileName = RenameItem.BuildFileName(picTimestamp);
+                        string outputFileName = RenameItem.BuildFileName(picTimestampLocal);
                         if (iSuffix > 0)
                             outputFileName += "_" + iSuffix.ToString("00");
                         outputFileName += ".jpg";
@@ -204,7 +223,7 @@ namespace ImageBulkRenamer
                         }
                     }
                 }
-                item.OutputFileTimestamp = picTimestamp;
+                item.OutputFileTimestamp = picTimestampLocal;
                 items[i] = item;
 
                 int progress = (int)(((double)(i + 1) / (double)files.Length) * 100D);
@@ -245,9 +264,11 @@ namespace ImageBulkRenamer
 
             if (noExifTimestampCount > 0)
             {
-                string msg = string.Format("{0} {1} had no EXIF timestamp",
+                string msg = string.Format("{0} {1} had no EXIF timestamp. {2} file creation {3} were used.",
                                            noExifTimestampCount,
-                                           (noExifTimestampCount == 1) ? "image" : "images");
+                                           (noExifTimestampCount == 1) ? "image" : "images",
+                                           fallbackTimestampCount,
+                                           (fallbackTimestampCount == 1) ? "timestamp" : "timestamps");
                 MessageBox.Show(this, msg, "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
@@ -304,62 +325,65 @@ namespace ImageBulkRenamer
 
             for (int i = 0; i < items.Length; i++)
             {
-                var sourceFileName = Path.Combine(imageDir.FullName, items[i].InputFileName);
-                var destFileName = Path.Combine(imageDir.FullName, items[i].OutputFileName);
-
-                if (items[i].OutputFileName == null)
+                if (items[i].OutputFileName != null)
                 {
-                    items[i].RenameStatus = skippedLabel;
-                    skippedCount++;
-                }
-                else if (string.Equals(items[i].InputFileName, items[i].OutputFileName, StringComparison.InvariantCultureIgnoreCase))
-                {
-                    items[i].RenameStatus = noChangeLabel;
-                    noChangeCount++;
-                }
-                else if (File.Exists(destFileName))
-                {
-                    items[i].RenameStatus = nameConflictLabel;
-                    nameConflictCount++;
-                }
-                else
-                {
-                    bool succeeded = true;
+                    var sourceFileName = Path.Combine(imageDir.FullName, items[i].InputFileName);
+                    var destFileName = Path.Combine(imageDir.FullName, items[i].OutputFileName);
 
-                    // Rename
-                    try
+                    if (string.Equals(items[i].InputFileName, items[i].OutputFileName, StringComparison.InvariantCultureIgnoreCase))
                     {
-                        File.Move(sourceFileName, destFileName);
+                        items[i].RenameStatus = noChangeLabel;
+                        noChangeCount++;
                     }
-                    catch (Exception)
+                    else if (File.Exists(destFileName))
                     {
-                        succeeded = false;
-                    }
-
-                    // Redate
-                    try
-                    {
-                        if (items[i].OutputFileTimestamp != DateTime.MinValue)
-                        {
-                            File.SetCreationTime(destFileName, items[i].OutputFileTimestamp);
-                            File.SetLastWriteTime(destFileName, items[i].OutputFileTimestamp);
-                        }
-                    }
-                    catch (Exception)
-                    {
-                        succeeded = false;
-                    }
-
-                    if (succeeded)
-                    {
-                        items[i].RenameStatus = okLabel;
-                        okCount++;
+                        items[i].RenameStatus = nameConflictLabel;
+                        nameConflictCount++;
                     }
                     else
                     {
-                        items[i].RenameStatus = errorLabel;
-                        errorCount++;
+                        bool succeeded = true;
+
+                        // Rename
+                        try
+                        {
+                            File.Move(sourceFileName, destFileName);
+                        }
+                        catch (Exception)
+                        {
+                            succeeded = false;
+                        }
+
+                        // Redate
+                        try
+                        {
+                            if (items[i].OutputFileTimestamp != DateTime.MinValue)
+                            {
+                                File.SetCreationTime(destFileName, items[i].OutputFileTimestamp);
+                                File.SetLastWriteTime(destFileName, items[i].OutputFileTimestamp);
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            succeeded = false;
+                        }
+
+                        if (succeeded)
+                        {
+                            items[i].RenameStatus = okLabel;
+                            okCount++;
+                        }
+                        else
+                        {
+                            items[i].RenameStatus = errorLabel;
+                            errorCount++;
+                        }
                     }
+                }
+                else
+                {
+                    items[i].RenameStatus = skippedLabel;
+                    skippedCount++;
                 }
 
                 int progress = (int)(((double)(i + 1) / (double)items.Length) * 100D);
