@@ -9,7 +9,7 @@
     <OutputType>WinExe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>uk.andyjohnson.ImageBulkRenamer</RootNamespace>
-    <AssemblyName>ImageBulkRenamer</AssemblyName>
+    <AssemblyName>ibr</AssemblyName>
     <TargetFrameworkVersion>v2.0</TargetFrameworkVersion>
     <TargetFrameworkProfile>
     </TargetFrameworkProfile>
