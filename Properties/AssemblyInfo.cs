@@ -10,7 +10,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("ImageBulkRenamer")]
-[assembly: AssemblyCopyright("Copyright ©  2014-2021 Andrew Johnson")]
+[assembly: AssemblyCopyright("Copyright ©  2014-2023 Andrew Johnson")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 

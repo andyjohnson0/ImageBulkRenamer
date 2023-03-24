@@ -42,6 +42,7 @@ namespace uk.andyjohnson.ImageBulkRenamer
         }
 
 
+        [System.Runtime.Versioning.SupportedOSPlatform("windows")]
         private void openToolStripMenuItem_Click(object sender, EventArgs e)
         {
             var dlg = new FolderBrowserDialog();
@@ -88,11 +89,11 @@ namespace uk.andyjohnson.ImageBulkRenamer
 
             if (e.Button == System.Windows.Forms.MouseButtons.Right)
             {
-                ContextMenu menu = new ContextMenu();
-                MenuItem item = menu.MenuItems.Add("&Edit");
+                var menu = new ContextMenuStrip();
+                var item = menu.Items.Add("&Edit");
                 item.Click += new EventHandler(ItemEdit_Click);
                 item.Tag = hitInfo.Item.Index;
-                item = menu.MenuItems.Add("&Preview");
+                item = menu.Items.Add("&Preview");
                 item.Click += new EventHandler(ItemPreview_Click);
                 item.Tag = hitInfo.Item.Index;
                 menu.Show(listView, e.Location);
@@ -114,14 +115,14 @@ namespace uk.andyjohnson.ImageBulkRenamer
 
         void ItemEdit_Click(object sender, EventArgs e)
         {
-            var itemIdx = (int) ((MenuItem)sender).Tag;  // Index into items array.
+            var itemIdx = (int) ((ToolStripMenuItem)sender).Tag;  // Index into items array.
             ShowItemEditDialog(itemIdx);
         }
 
 
         void ItemPreview_Click(object sender, EventArgs e)
         {
-            var itemIdx = (int)((MenuItem)sender).Tag;  // Index into items array.
+            var itemIdx = (int)((ToolStripMenuItem)sender).Tag;  // Index into items array.
             System.Diagnostics.Process proc = new System.Diagnostics.Process();
             proc.EnableRaisingEvents = false;
             proc.StartInfo.FileName = Path.Combine(imageDir.FullName, items[itemIdx].InputFileName);
@@ -151,6 +152,7 @@ namespace uk.andyjohnson.ImageBulkRenamer
         private int fallbackTimestampCount;
 
 
+        [System.Runtime.Versioning.SupportedOSPlatform("windows")]
         void GetTimestampsWkr_DoWork(object sender, DoWorkEventArgs e)
         {
             BackgroundWorker wkr = sender as BackgroundWorker;

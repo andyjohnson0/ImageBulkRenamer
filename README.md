@@ -11,7 +11,7 @@ The current version does just what I need and no more. The code is fairly hacky 
 
 ## Installation and Use
 
-The application is a C#/WinForms program that compiles to a exe that requires .Net 4.0. Simply compile it and run the exe.
+The application is a C#/WinForms program that compiles to a exe that requires .net 6. Simply compile it and run the exe.
 
 Click File->Open and select a directory. A preview list will then be generated showing how the files will be reanmed. Click the Rename
 button to rename all the files, or double-click an invividual list item to override the naming.
@@ -21,7 +21,8 @@ timestamps are also set to the EXIF timestamp.
 
 The program is carefully written to make data-loss impossible. It uses File.Move() *without* the overwrite flag, which should make it
 impossible to inadvertantly delete any file. If a target filename already exists then any files to be given the same name are simply
-skipped.
+skipped. Nevertheless, it is advisable to back-up important files before using the application.
+
 
 ## Author
 
