@@ -15,7 +15,9 @@ namespace uk.andyjohnson.ImageBulkRenamer
             Application.EnableVisualStyles();
             Application.SetHighDpiMode(HighDpiMode.SystemAware);
             Application.SetCompatibleTextRenderingDefault(false);
+#pragma warning disable CA1416 // Validate platform compatibility
             Application.Run(new MainForm());
+#pragma warning restore CA1416 // Validate platform compatibility
         }
     }
 }

@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Data;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Text;
@@ -12,6 +11,7 @@ using System.Reflection;
 
 namespace uk.andyjohnson.ImageBulkRenamer
 {
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     public partial class MainForm : Form
     {
         public MainForm()
@@ -20,6 +20,7 @@ namespace uk.andyjohnson.ImageBulkRenamer
         }
 
         private DirectoryInfo imageDir;
+        private PreviewWkrResult lastPreviewResult;
 
 
         private void MainForm_Load(object sender, EventArgs e)
@@ -36,13 +37,15 @@ namespace uk.andyjohnson.ImageBulkRenamer
 
         private void aboutToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            var msg = string.Format("Image File Bulk Renamer v{0} by Andrew Johnson.\r\n\r\nSee https://github.com/andyjohnson0/ImageBulkRenamer for info.",
-                                    Assembly.GetExecutingAssembly().GetName().Version.ToString());
-            MessageBox.Show(this, msg, "About", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            var versionStr = Assembly.GetExecutingAssembly().GetName().Version.ToString();
+            MessageBox.Show(this,
+                            $"Image File Bulk Renamer v{versionStr}\n\n" +
+                            "by Andrew Johnson.| https://andyjohnson.uk\n\n" +
+                            "See https://github.com/andyjohnson0/ImageBulkRenamer for info",
+                            "About", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
 
-        [System.Runtime.Versioning.SupportedOSPlatform("windows")]
         private void openToolStripMenuItem_Click(object sender, EventArgs e)
         {
             var dlg = new FolderBrowserDialog();
@@ -51,33 +54,9 @@ namespace uk.andyjohnson.ImageBulkRenamer
                 dlg.SelectedPath = imageDir.FullName;
             else
                 dlg.SelectedPath = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
-            if (dlg.ShowDialog(this) == System.Windows.Forms.DialogResult.Cancel)
+            if (dlg.ShowDialog(this) == DialogResult.Cancel)
                 return;
-            imageDir = new DirectoryInfo(dlg.SelectedPath);
-
-            this.UseWaitCursor = true;
-            this.Enabled = false;
-            preview_fallbackToFileCreationTimestamp = fallbackToFileCreationCb.Checked;
-            BackgroundWorker wkr = new BackgroundWorker();
-            wkr.DoWork += new DoWorkEventHandler(GetTimestampsWkr_DoWork);
-            wkr.RunWorkerCompleted += new RunWorkerCompletedEventHandler(GetTimestampsWkr_RunWorkerCompleted);
-            wkr.WorkerReportsProgress = true;
-            wkr.ProgressChanged += new ProgressChangedEventHandler(GetTimestampsWkr_ProgressChanged);
-            wkr.RunWorkerAsync();
-        }
-
-
-        private void startButton_Click(object sender, EventArgs e)
-        {
-            this.UseWaitCursor = true;
-            this.Enabled = false;
-
-            var wkr = new BackgroundWorker();
-            wkr.DoWork += new DoWorkEventHandler(RenameWkr_DoWork);
-            wkr.RunWorkerCompleted += new RunWorkerCompletedEventHandler(RenameWkr_RunWorkerCompleted);
-            wkr.WorkerReportsProgress = true;
-            wkr.ProgressChanged += new ProgressChangedEventHandler(RenameWkr_ProgressChanged);
-            wkr.RunWorkerAsync();
+            DoPreview(new DirectoryInfo(dlg.SelectedPath));
         }
 
 
@@ -87,7 +66,7 @@ namespace uk.andyjohnson.ImageBulkRenamer
             if ((hitInfo == null) || (hitInfo.Item == null))
                 return;
 
-            if (e.Button == System.Windows.Forms.MouseButtons.Right)
+            if (e.Button == MouseButtons.Right)
             {
                 var menu = new ContextMenuStrip();
                 var item = menu.Items.Add("&Edit");
@@ -106,7 +85,7 @@ namespace uk.andyjohnson.ImageBulkRenamer
             ListViewHitTestInfo hitInfo = listView.HitTest(e.Location);
             if ((hitInfo == null) || (hitInfo.Item == null))
                 return;
-            if (e.Button == System.Windows.Forms.MouseButtons.Left)
+            if (e.Button == MouseButtons.Left)
             {
                 ShowItemEditDialog(hitInfo.Item.Index);
             }
@@ -122,54 +101,122 @@ namespace uk.andyjohnson.ImageBulkRenamer
 
         void ItemPreview_Click(object sender, EventArgs e)
         {
+            if (lastPreviewResult == null)
+                return;
+
             var itemIdx = (int)((ToolStripMenuItem)sender).Tag;  // Index into items array.
             System.Diagnostics.Process proc = new System.Diagnostics.Process();
             proc.EnableRaisingEvents = false;
-            proc.StartInfo.FileName = Path.Combine(imageDir.FullName, items[itemIdx].InputFileName);
+            proc.StartInfo.FileName = Path.Combine(imageDir.FullName, lastPreviewResult.Items[itemIdx].InputImageFileName);
             proc.Start();
         }
 
 
         private void ShowItemEditDialog(int itemIdx)
         {
-            var dlg = new ItemEditDialog(items[itemIdx]);
-            if (dlg.ShowDialog(this) != System.Windows.Forms.DialogResult.OK)
+            if (lastPreviewResult == null)
                 return;
 
-            items[itemIdx] = dlg.Item;
-            var lvi = CreateListViewItem(items[itemIdx]);
+            var dlg = new RenameItemEditDialog(lastPreviewResult.Items[itemIdx]);
+            if (dlg.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            lastPreviewResult.Items[itemIdx] = dlg.Item;
+            var lvi = CreateListViewItem(lastPreviewResult.Items[itemIdx]);
             listView.Items[itemIdx] = lvi;
             listView.AutoResizeColumns(ColumnHeaderAutoResizeStyle.HeaderSize);
+        }
+
+
+        private void startButton_Click(object sender, EventArgs e)
+        {
+            if (lastPreviewResult == null)
+                return;
+
+            DoRename(this.imageDir);
+        }
+
+
+        private static ListViewItem CreateListViewItem(RenameItem item)
+        {
+            var lvi = new ListViewItem();
+            lvi.Text = item.InputImageFileName;
+            if (item.InputImageExifTimestamp != DateTime.MinValue)
+                lvi.SubItems.Add(item.InputImageExifTimestamp.ToString("yyyy-MM-dd HH:mm:ss"));
+            else
+                lvi.SubItems.Add("");
+            if (item.OutputImageFileName != null)
+                lvi.SubItems.Add(item.OutputImageFileName);
+            else
+                lvi.SubItems.Add("");
+            if (item.OutputImageFileTimestamp != DateTime.MinValue)
+                lvi.SubItems.Add(item.OutputImageFileTimestamp.ToString("yyyy-MM-dd HH:mm:ss"));
+            else
+                lvi.SubItems.Add("");
+            if (item.RenameStatus != null)
+                lvi.SubItems.Add(item.RenameStatus);
+            else
+                lvi.SubItems.Add("");
+            return lvi;
         }
 
 
 
         #region Preview
 
-        private bool preview_fallbackToFileCreationTimestamp;
-        private RenameItem[] items;
-        private int noExifTimestampCount;
-        private int fallbackTimestampCount;
-
-
-        [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-        void GetTimestampsWkr_DoWork(object sender, DoWorkEventArgs e)
+        private void DoPreview(DirectoryInfo di)
         {
-            BackgroundWorker wkr = sender as BackgroundWorker;
+            this.imageDir = di;
 
-            noExifTimestampCount = 0;
+            this.UseWaitCursor = true;
+            this.Enabled = false;
+            var wkr = new BackgroundWorker();
+            wkr.DoWork += new DoWorkEventHandler(PreviewWkr_DoWork);
+            wkr.RunWorkerCompleted += new RunWorkerCompletedEventHandler(PreviewWkr_RunWorkerCompleted);
+            wkr.WorkerReportsProgress = true;
+            wkr.ProgressChanged += new ProgressChangedEventHandler(PreviewWkr_ProgressChanged);
+            var workerArgs = new PreviewWkrArgs
+            {
+                FallbackToFileCreationTimestamp = fallbackToFileCreationCb.Checked,
+                RenameSidecarFiles = renameXmpSidecarFilesCb.Checked
+            };
+            wkr.RunWorkerAsync(workerArgs);
+        }
 
-            FileInfo[] files = imageDir.GetFiles("*.jp*g");
-            items = new RenameItem[files.Length];
+
+        private class PreviewWkrArgs
+        {
+            public bool FallbackToFileCreationTimestamp;
+            public bool RenameSidecarFiles;
+        }
+
+        private class PreviewWkrResult
+        {
+            public RenameItem[] Items;
+            public int NoExifTimestampCount = 0;
+            public int FallbackTimestampCount = 0;
+        }
+
+
+        void PreviewWkr_DoWork(object sender, DoWorkEventArgs e)
+        {
+            var wkr = sender as BackgroundWorker;
+            var args = e.Argument as PreviewWkrArgs;
+            var result = new PreviewWkrResult();
+
+            result.NoExifTimestampCount = 0;
+
+            FileInfo[] files = this.imageDir.GetFiles("*.jp*g");
+            result.Items = new RenameItem[files.Length];
 
             for(int i = 0; i < files.Length; i++)
             {
-                FileInfo fi = files[i];
+                var imageFi = files[i];
 
                 DateTime picTimestampLocal;
                 try
                 {
-                    using (var bmp = new Bitmap(fi.FullName))
+                    using (var bmp = new Bitmap(imageFi.FullName))
                     {
                         PropertyItem bmpDateTime = bmp.GetPropertyItem(0x9003);
                         if (bmpDateTime == null)
@@ -181,24 +228,27 @@ namespace uk.andyjohnson.ImageBulkRenamer
                 }
                 catch (ArgumentException)
                 {
-                    if (preview_fallbackToFileCreationTimestamp)
+                    if (args.FallbackToFileCreationTimestamp)
                     {
-                        picTimestampLocal = fi.CreationTime;
-                        noExifTimestampCount++;
-                        fallbackTimestampCount++;
+                        picTimestampLocal = imageFi.CreationTime;
+                        result.NoExifTimestampCount++;
+                        result.FallbackTimestampCount++;
                     }
                     else
                     {
                         picTimestampLocal = DateTime.MinValue;
-                        noExifTimestampCount++;
+                        result.NoExifTimestampCount++;
                     }
                 }
 
-                var item = new RenameItem();
-                item.InputFileName = fi.Name;
-                item.InputExifTimestamp = picTimestampLocal;
-                item.InputFileCreatonTimestamp = fi.CreationTimeUtc;
-                item.InputFileModificationTimestamp = fi.LastWriteTimeUtc;
+                // Image file
+                var item = new RenameItem()
+                {
+                    InputImageFileName = imageFi.Name,
+                    InputImageExifTimestamp = picTimestampLocal,
+                    InputImageFileCreatonTimestamp = imageFi.CreationTimeUtc,
+                    InputImageFileModificationTimestamp = imageFi.LastWriteTimeUtc
+                };
                 if (picTimestampLocal != DateTime.MinValue)
                 {
                     for(int iSuffix = 0; iSuffix <= 99; iSuffix++)
@@ -211,7 +261,7 @@ namespace uk.andyjohnson.ImageBulkRenamer
                         bool found = false;
                         for (int j = 0; j < i; j++)
                         {
-                            if (items[j].OutputFileName == outputFileName)
+                            if (result.Items[j].OutputImageFileName == outputFileName)
                             {
                                 found = true;
                                 break;
@@ -220,43 +270,57 @@ namespace uk.andyjohnson.ImageBulkRenamer
 
                         if (!found)
                         {
-                            item.OutputFileName = outputFileName;
+                            item.OutputImageFileName = outputFileName;
                             break;
                         }
                     }
                 }
-                item.OutputFileTimestamp = picTimestampLocal;
-                items[i] = item;
+                item.OutputImageFileTimestamp = picTimestampLocal;
 
-                int progress = (int)(((double)(i + 1) / (double)files.Length) * 100D);
-                wkr.ReportProgress(progress, i);
+                // Optional sidecar file
+                var sidecarFi = new FileInfo(imageFi.FullName + ".xmp");
+                if (sidecarFi.Exists)
+                {
+                    item.InputSidecarFileName = sidecarFi.Name;
+                    item.OutputSidecarFileName = item.OutputImageFileName + ".xmp";
+                }
+
+                //
+                result.Items[i] = item;
+
+                int progressPct = (int)(((double)(i + 1) / (double)files.Length) * 100D);
+                wkr.ReportProgress(progressPct, (i, result.Items[i]));
             }
+
+            e.Result = result;
         }
 
 
-        void GetTimestampsWkr_ProgressChanged(object sender, ProgressChangedEventArgs e)
+        void PreviewWkr_ProgressChanged(object sender, ProgressChangedEventArgs e)
         {
-            int itemIdx = (int)e.UserState;
+            var state = ((int itemIdx, RenameItem item))e.UserState;
 
-            if (itemIdx == 0)
+            if (state.itemIdx == 0)
                 toolStripProgressBar.Visible = true;
             toolStripProgressBar.Value = e.ProgressPercentage;
             toolStripStatusLabel.Text = string.Format("Building preview ({0}%)", e.ProgressPercentage);
 
             listView.BeginUpdate();
-
-            if (itemIdx == 0)
+            if (state.itemIdx == 0)
                 listView.Items.Clear();
-            var lvi = CreateListViewItem(items[itemIdx]);
+            var lvi = CreateListViewItem(state.item);
             listView.Items.Add(lvi);
             lvi.EnsureVisible();
-
             listView.EndUpdate();
         }
 
 
-        void GetTimestampsWkr_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
+        void PreviewWkr_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
         {
+            var result = e.Result as PreviewWkrResult;
+            this.lastPreviewResult = result;
+
+            listView.EnsureVisible(0);
             toolStripProgressBar.Visible = false;
             toolStripStatusLabel.Text = "Ready";
             listView.AutoResizeColumns(ColumnHeaderAutoResizeStyle.HeaderSize);
@@ -264,43 +328,16 @@ namespace uk.andyjohnson.ImageBulkRenamer
             this.Enabled = true;
             startButton.Enabled = (listView.Items.Count > 0);
 
-            if (noExifTimestampCount > 0)
+            if (result.NoExifTimestampCount > 0)
             {
                 string msg = string.Format("{0} {1} had no EXIF timestamp. {2} file creation {3} were used.",
-                                           noExifTimestampCount,
-                                           (noExifTimestampCount == 1) ? "image" : "images",
-                                           fallbackTimestampCount,
-                                           (fallbackTimestampCount == 1) ? "timestamp" : "timestamps");
+                                           result.NoExifTimestampCount,
+                                           (result.NoExifTimestampCount == 1) ? "image" : "images",
+                                           result.FallbackTimestampCount,
+                                           (result.FallbackTimestampCount == 1) ? "timestamp" : "timestamps");
                 MessageBox.Show(this, msg, "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
-
-
-
-
-        private static ListViewItem CreateListViewItem(RenameItem item)
-        {
-            var lvi = new ListViewItem();
-            lvi.Text = item.InputFileName;
-            if (item.InputExifTimestamp != DateTime.MinValue)
-                lvi.SubItems.Add(item.InputExifTimestamp.ToString("yyyy-MM-dd HH:mm:ss"));
-            else
-                lvi.SubItems.Add("");
-            if (item.OutputFileName != null)
-                lvi.SubItems.Add(item.OutputFileName);
-            else
-                lvi.SubItems.Add("");
-            if (item.OutputFileTimestamp != DateTime.MinValue)
-                lvi.SubItems.Add(item.OutputFileTimestamp.ToString("yyyy-MM-dd HH:mm:ss"));
-            else
-                lvi.SubItems.Add("");
-            if (item.RenameStatus != null)
-                lvi.SubItems.Add(item.RenameStatus);
-            else
-                lvi.SubItems.Add("");
-            return lvi;
-        }
-
 
         #endregion Preview
 
@@ -308,48 +345,80 @@ namespace uk.andyjohnson.ImageBulkRenamer
 
         #region Image Renaming
 
-        private int okCount;
-        private int noChangeCount;
-        private int skippedCount;
-        private int nameConflictCount;
-        private int errorCount;
-        private const string okLabel = "OK";
-        private const string noChangeLabel = "No change";
-        private const string skippedLabel = "Skipped";
-        private const string nameConflictLabel = "Filename already exists";
-        private const string errorLabel = "Error";
+
+        private void DoRename(
+            DirectoryInfo di)
+        {
+            this.UseWaitCursor = true;
+            this.Enabled = false;
+
+            var wkr = new BackgroundWorker();
+            wkr.DoWork += new DoWorkEventHandler(RenameWkr_DoWork);
+            wkr.RunWorkerCompleted += new RunWorkerCompletedEventHandler(RenameWkr_RunWorkerCompleted);
+            wkr.WorkerReportsProgress = true;
+            wkr.ProgressChanged += new ProgressChangedEventHandler(RenameWkr_ProgressChanged);
+            var workerArgs = new RenameWkrArgs()
+            {
+                Items = lastPreviewResult.Items
+            };
+            wkr.RunWorkerAsync(workerArgs);
+        }
+
+        private class RenameWkrArgs
+        {
+            public RenameItem[] Items;
+        }
+
+        private class RenameWkrResult
+        {
+            public int OkCount = 0;
+            public int NoChangeCount = 0;
+            public int SkippedCount = 0;
+            public int NameConflictCount = 0;
+            public int ErrorCount = 0;
+        }
+
+        private static class RenameStatus
+        {
+            public const string OkLabel = "OK";
+            public const string NoChangeLabel = "No change";
+            public const string SkippedLabel = "Skipped";
+            public const string NameConflictLabel = "Filename already exists";
+            public const string ErrorLabel = "Error";
+        }
+
 
         void RenameWkr_DoWork(object sender, DoWorkEventArgs e)
         {
             BackgroundWorker wkr = sender as BackgroundWorker;
+            var args = e.Argument as RenameWkrArgs;
+            var result = new RenameWkrResult();
 
-            okCount = noChangeCount = skippedCount = nameConflictCount = errorCount = 0;
-
-            for (int i = 0; i < items.Length; i++)
+            for (int i = 0; i < args.Items.Length; i++)
             {
-                if (items[i].OutputFileName != null)
+                if (args.Items[i].OutputImageFileName != null)
                 {
-                    var sourceFileName = Path.Combine(imageDir.FullName, items[i].InputFileName);
-                    var destFileName = Path.Combine(imageDir.FullName, items[i].OutputFileName);
+                    var sourceImageFileName = Path.Combine(imageDir.FullName, args.Items[i].InputImageFileName);
+                    var destImageFileName = Path.Combine(imageDir.FullName, args.Items[i].OutputImageFileName);
 
-                    if (string.Equals(items[i].InputFileName, items[i].OutputFileName, StringComparison.InvariantCultureIgnoreCase))
+                    if (string.Equals(args.Items[i].InputImageFileName, args.Items[i].OutputImageFileName, StringComparison.InvariantCultureIgnoreCase))
                     {
-                        items[i].RenameStatus = noChangeLabel;
-                        noChangeCount++;
+                        args.Items[i].RenameStatus = RenameStatus.NoChangeLabel;
+                        result.NoChangeCount++;
                     }
-                    else if (File.Exists(destFileName))
+                    else if (File.Exists(destImageFileName))
                     {
-                        items[i].RenameStatus = nameConflictLabel;
-                        nameConflictCount++;
+                        args.Items[i].RenameStatus = RenameStatus.NameConflictLabel;
+                        result.NameConflictCount++;
                     }
                     else
                     {
                         bool succeeded = true;
 
-                        // Rename
+                        // Rename image
                         try
                         {
-                            File.Move(sourceFileName, destFileName);
+                            File.Move(sourceImageFileName, destImageFileName);
                         }
                         catch (Exception)
                         {
@@ -359,10 +428,10 @@ namespace uk.andyjohnson.ImageBulkRenamer
                         // Redate
                         try
                         {
-                            if (items[i].OutputFileTimestamp != DateTime.MinValue)
+                            if (args.Items[i].OutputImageFileTimestamp != DateTime.MinValue)
                             {
-                                File.SetCreationTime(destFileName, items[i].OutputFileTimestamp);
-                                File.SetLastWriteTime(destFileName, items[i].OutputFileTimestamp);
+                                File.SetCreationTime(destImageFileName, args.Items[i].OutputImageFileTimestamp);
+                                File.SetLastWriteTime(destImageFileName, args.Items[i].OutputImageFileTimestamp);
                             }
                         }
                         catch (Exception)
@@ -370,60 +439,74 @@ namespace uk.andyjohnson.ImageBulkRenamer
                             succeeded = false;
                         }
 
+                        if (succeeded && !string.IsNullOrEmpty(args.Items[i].InputSidecarFileName) && !string.IsNullOrEmpty(args.Items[i].OutputSidecarFileName))
+                        {
+                            var sourceSidecarFileName = Path.Combine(imageDir.FullName, args.Items[i].InputSidecarFileName);
+                            var destSidecarFileName = Path.Combine(imageDir.FullName, args.Items[i].OutputSidecarFileName);
+                            try
+                            {
+                                File.Move(sourceSidecarFileName, destSidecarFileName);
+                            }
+                            catch (Exception)
+                            {
+                                succeeded = false;
+                            }
+                        }
+
                         if (succeeded)
                         {
-                            items[i].RenameStatus = okLabel;
-                            okCount++;
+                            args.Items[i].RenameStatus = RenameStatus.OkLabel;
+                            result.OkCount++;
                         }
                         else
                         {
-                            items[i].RenameStatus = errorLabel;
-                            errorCount++;
+                            args.Items[i].RenameStatus = RenameStatus.ErrorLabel;
+                            result.ErrorCount++;
                         }
                     }
                 }
                 else
                 {
-                    items[i].RenameStatus = skippedLabel;
-                    skippedCount++;
+                    args.Items[i].RenameStatus = RenameStatus.SkippedLabel;
+                    result.SkippedCount++;
                 }
 
-                int progress = (int)(((double)(i + 1) / (double)items.Length) * 100D);
-                wkr.ReportProgress(progress, i);
+                int progressPct = (int)(((double)(i + 1) / (double)args.Items.Length) * 100D);
+                wkr.ReportProgress(progressPct, (i, args.Items[i]));
             }
+
+            e.Result = result;
         }
 
 
         void RenameWkr_ProgressChanged(object sender, ProgressChangedEventArgs e)
         {
-            int itemIdx = (int)e.UserState;
+            var state = ((int itemIdx, RenameItem item))e.UserState;
 
-            if (itemIdx == 0)
+            if (state.itemIdx == 0)
                 toolStripProgressBar.Visible = true;
             toolStripProgressBar.Value = e.ProgressPercentage;
             toolStripStatusLabel.Text = string.Format("Renaming files ({0}%)", e.ProgressPercentage);
 
             listView.BeginUpdate();
-            ListViewItem lvi = listView.Items[itemIdx];
-            lvi.SubItems[4].Text = items[itemIdx].RenameStatus;
-
-            switch(items[itemIdx].RenameStatus)
+            ListViewItem lvi = listView.Items[state.itemIdx];
+            lvi.SubItems[4].Text = state.item.RenameStatus;
+            switch(state.item.RenameStatus)
             {
-                case okLabel:
+                case RenameStatus.OkLabel:
                     break;
-                case noChangeLabel:
+                case RenameStatus.NoChangeLabel:
                     break;
-                case skippedLabel:
+                case RenameStatus.SkippedLabel:
                     lvi.BackColor = Color.Orange;
                     break;
-                case nameConflictLabel:
+                case RenameStatus.NameConflictLabel:
                     lvi.BackColor = Color.Orange;
                     break;
-                case errorLabel:
+                case RenameStatus.ErrorLabel:
                     lvi.BackColor = Color.Red;
                     break;
             }
-
             lvi.EnsureVisible();
             listView.EndUpdate();
         }
@@ -431,6 +514,8 @@ namespace uk.andyjohnson.ImageBulkRenamer
 
         void RenameWkr_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
         {
+            var result = e.Result as RenameWkrResult;
+
             toolStripProgressBar.Visible = false;
             toolStripStatusLabel.Text = "Ready";
             listView.AutoResizeColumns(ColumnHeaderAutoResizeStyle.HeaderSize);
@@ -438,29 +523,28 @@ namespace uk.andyjohnson.ImageBulkRenamer
             this.Enabled = true;
 
             var sb = new StringBuilder();
-            sb.Append(string.Format("{0} image {1} renamed.", okCount, (okCount == 1) ? "file was" : "files were"));
+            sb.Append(string.Format("{0} image {1} renamed.", result.OkCount, (result.OkCount == 1) ? "file was" : "files were"));
             var icon = MessageBoxIcon.Information;
-            if (noChangeCount > 0)
+            if (result.NoChangeCount > 0)
             {
-                sb.Append(string.Format(" {0} image {1} not renamed.", noChangeCount, (noChangeCount == 1) ? "file was" : "files were"));
+                sb.Append(string.Format(" {0} image {1} not renamed.", result.NoChangeCount, (result.NoChangeCount == 1) ? "file was" : "files were"));
             }
-            if (skippedCount > 0)
+            if (result.SkippedCount > 0)
             {
-                sb.Append(string.Format(" {0} image {1} skipped.", skippedCount, (skippedCount == 1) ? "file was" : "files were"));
+                sb.Append(string.Format(" {0} image {1} skipped.", result.SkippedCount, (result.SkippedCount == 1) ? "file was" : "files were"));
                 icon = MessageBoxIcon.Warning;
             }
-            if (nameConflictCount > 0)
+            if (result.NameConflictCount > 0)
             {
-                sb.Append(string.Format(" {0} image {1} had name conflicts.", nameConflictCount, (nameConflictCount == 1) ? "file" : "files"));
+                sb.Append(string.Format(" {0} image {1} had name conflicts.", result.NameConflictCount, (result.NameConflictCount == 1) ? "file" : "files"));
                 icon = MessageBoxIcon.Warning;
             }
-            if (errorCount > 0)
+            if (result.ErrorCount > 0)
             {
-                sb.Append(string.Format(" {0} {1} detected.", errorCount, (errorCount == 1) ? "error was" : "errors were"));
+                sb.Append(string.Format(" {0} {1} detected.", result.ErrorCount, (result.ErrorCount == 1) ? "error was" : "errors were"));
                 icon = MessageBoxIcon.Warning;
             }
             MessageBox.Show(this, sb.ToString(), "Rename Completed", MessageBoxButtons.OK, icon);
-
         }
 
         #endregion Image Renaming
