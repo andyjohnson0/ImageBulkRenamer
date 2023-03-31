@@ -1,35 +1,28 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+	
   <PropertyGroup>
-    <TargetFramework>net6.0-windows</TargetFramework>
-    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
     <OutputType>WinExe</OutputType>
+    <TargetFramework>net6.0-windows</TargetFramework>
+	<Nullable>disable</Nullable>
+	<UseWindowsForms>true</UseWindowsForms>
+	<ImplicitUsings>disable</ImplicitUsings>
     <RootNamespace>uk.andyjohnson.ImageBulkRenamer</RootNamespace>
-    <AssemblyName>ibr</AssemblyName>
-    <SccProjectName>SAK</SccProjectName>
-    <SccLocalPath>SAK</SccLocalPath>
-    <SccAuxPath>SAK</SccAuxPath>
-    <SccProvider>SAK</SccProvider>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <UseWindowsForms>true</UseWindowsForms>
-    <ImportWindowsDesktopTargets>true</ImportWindowsDesktopTargets>
     <Title>Image Bulk Renamer</Title>
     <Authors>Andrew Johnson</Authors>
-    <Description>Image Bulk Renamer</Description>
+    <Description>Image Bulk Renamer</Description>	  
     <PackageProjectUrl>https://github.com/andyjohnson0/ImageBulkRenamer</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/andyjohnson0/ImageBulkRenamer</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
-    <AssemblyVersion>1.2</AssemblyVersion>
-    <Version>1.2</Version>
-    <FileVersion>1.2</FileVersion>
+    <RepositoryType>git</RepositoryType>	  
+    <Version>1.2.1</Version>
+    <AssemblyName>ibr</AssemblyName>
   </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Windows.Compatibility" Version="7.0.0" />
-  </ItemGroup>
+	
   <ItemGroup>
     <None Update="README.md">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
   </ItemGroup>
+	
 </Project>

@@ -37,7 +37,8 @@ namespace uk.andyjohnson.ImageBulkRenamer
 
         private void aboutToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            var versionStr = Assembly.GetExecutingAssembly().GetName().Version.ToString();
+            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            var versionStr = version != null ? "v" + version.ToString() : "";
             MessageBox.Show(this,
                             $"Image File Bulk Renamer v{versionStr}\n\n" +
                             "by Andrew Johnson.| https://andyjohnson.uk\n\n" +

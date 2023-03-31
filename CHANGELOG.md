@@ -1,5 +1,11 @@
 # Image Bulk Renamer
 
+## v1.2.1 2023-03-31
+
+Fixed assembly metadata generation affecting help->about.
+Removed unneccessary nuget dependency.
+
+
 ## v1.2 2023-03-30
 
 Added option to rename xmp sidecar files.
